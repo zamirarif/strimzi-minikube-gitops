@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - target:
+      group: kafka.strimzi.io
+      version: v1
+      kind: Kafka
+      name: local-kafka
+    patch: |-
+      - op: add
+        path: /spec/kafka/listeners/-
+        value:
+          name: external
+          port: 9094
+          type: nodeport
+          tls: true

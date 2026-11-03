@@ -1,0 +1,28 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: app-user
+  labels:
+    strimzi.io/cluster: local-kafka
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: topic
+          name: demo-events
+          patternType: literal
+        operations:
+          - Describe
+          - Read
+          - Write
+        host: "*"
+      - resource:
+          type: group
+          name: demo-consumer
+          patternType: literal
+        operations:
+          - Read
+        host: "*"

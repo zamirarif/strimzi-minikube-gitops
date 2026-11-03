@@ -1,0 +1,3 @@
+# Keep the operator's single replica and small resource envelope for Minikube.
+fullReconciliationIntervalMs: 120000
+operationTimeoutMs: 300000

@@ -130,7 +130,31 @@ kubectl -n argocd rollout status deployment/argocd-server --timeout=5m
 kubectl apply -f bootstrap/root-application.yaml
 ```
 
-For private repositories, configure Argo CD repository credentials before applying the root Application. For example, use the Argo CD CLI with a GitHub token held in a secret manager/environment variable; never commit credentials to this repository.
+This bootstrap creates a **private** GitHub repository, so Argo CD needs read access before it can load the root Application. Create a GitHub fine-grained personal access token scoped to this repository with **Contents: read-only** permission. Register it as an Argo CD repository Secret (do not commit it):
+
+```bash
+export GITHUB_USER="$(gh api user --jq .login)"
+export REPO_URL="https://github.com/${GITHUB_USER}/strimzi-minikube-gitops.git"
+read -rsp "GitHub read-only token: " GITHUB_TOKEN
+printf '\n'
+
+kubectl -n argocd create secret generic github-gitops-repo \
+  --from-literal=type=git \
+  --from-literal=url="${REPO_URL}" \
+  --from-literal=username="${GITHUB_USER}" \
+  --from-literal=password="${GITHUB_TOKEN}" \
+  --dry-run=client -o yaml |
+  kubectl apply -f -
+kubectl -n argocd label secret github-gitops-repo \
+  argocd.argoproj.io/secret-type=repository --overwrite
+unset GITHUB_TOKEN
+
+# Refresh the root app to retry Git access after registering credentials.
+kubectl -n argocd annotate application root \
+  argocd.argoproj.io/refresh=hard --overwrite
+```
+
+The URL in the Secret must exactly match `repoURL` in the Applications (including HTTPS and `.git`). Confirm that `${REPO_URL}` is the actual repository and that branch `main` exists. To use a different owner or repository name, update the URL in every Application source and in this command. For public repositories, credentials are unnecessary.
 
 An equivalent CLI bootstrap for an already-installed Argo CD is:
 
@@ -217,6 +241,7 @@ kubectl -n kafka exec local-kafka-local-0 -c kafka -- \
 - **Pods pending or evicted:** check `kubectl describe pod -n kafka <pod>` and `kubectl describe node minikube`; increase Minikube RAM/CPU and verify available disk.
 - **PVC pending:** inspect `kubectl get storageclass,pvc -A`. Minikube's default storage provisioner must be enabled. Do not delete PVCs unless intentionally discarding the local Kafka data.
 - **Kafka not Ready:** inspect Kafka and KafkaNodePool status conditions and operator logs. Ensure all three broker/controller pods have persistent claims and that the Kafka pool's cluster label matches `local-kafka`.
+- **Kafka Application reports `.spec.kafka.resources: field not declared in schema`:** Kafka broker resource requests and limits belong on the `KafkaNodePool` spec, not `Kafka.spec.kafka`. The local node pool manifest sets them; remove the unsupported field from the Kafka resource and let Argo CD resync.
 - **NodePort bootstrap connects but brokers do not:** Kafka clients must reach every advertised broker NodePort, not only the bootstrap service. Confirm the node IP and ports are routable from the host; Docker driver networking can require a different Minikube driver or a carefully configured tunnel.
 - **Topic/User not Ready:** verify `entity-operator` pods are running and their CR labels point at `local-kafka`; inspect `kubectl -n kafka describe kafkatopic demo-events` and `kubectl -n kafka describe kafkauser app-user`.
 

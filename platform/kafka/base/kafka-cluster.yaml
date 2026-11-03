@@ -23,13 +23,6 @@ spec:
       transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
       auto.create.topics.enable: false
-    resources:
-      requests:
-        cpu: 250m
-        memory: 512Mi
-      limits:
-        cpu: "1"
-        memory: 768Mi
     jvmOptions:
       -Xms: 256m
       -Xmx: 512m

@@ -20,9 +20,12 @@ flowchart TD
     Apps --> Namespaces
     Apps --> Operator
     Apps --> Kafka
+    Apps --> Monitoring[Prometheus and Grafana]
     Operator --> Cluster
     Cluster --> Entity
     Cluster --> External
+    Monitoring --> KafkaMetrics[Kafka and Strimzi metrics]
+    Monitoring --> NodeMetrics[Kubernetes node and workload metrics]
     External --> Client[Minikube host client]
 ```
 
@@ -45,12 +48,18 @@ Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. T
 │   ├── base/
 │   │   ├── kafka.yaml
 │   │   ├── kustomization.yaml
+│   │   ├── monitoring.yaml
 │   │   ├── namespaces.yaml
 │   │   └── strimzi.yaml
 │   └── overlays/
 │       ├── dev/kustomization.yaml
 │       └── local/kustomization.yaml
 ├── infrastructure/
+│   ├── monitoring/
+│   │   ├── values.yaml
+│   │   └── overlays/
+│   │       ├── dev/values.yaml
+│   │       └── local/values.yaml
 │   └── strimzi/
 │       ├── values.yaml
 │       └── overlays/
@@ -67,6 +76,15 @@ Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. T
 │   │   └── overlays/
 │   │       ├── dev/kustomization.yaml
 │   │       └── local/kustomization.yaml
+│   ├── monitoring/
+│   │   ├── base/
+│   │   │   ├── dashboards/kafka-overview.json
+│   │   │   ├── kafka-pod-monitor.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── strimzi-operator-pod-monitor.yaml
+│   │   └── overlays/
+│   │       ├── dev/kustomization.yaml
+│   │       └── local/kustomization.yaml
 │   └── namespaces/
 │       ├── base/
 │       │   ├── kustomization.yaml
@@ -79,6 +97,8 @@ Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. T
 
 `applications/base` defines the child Applications; environment-specific Application sets live in `applications/overlays/<environment>`. The Kafka base contains environment-neutral CRs; its `local` overlay adds a TLS NodePort listener. The included `dev` overlays reuse the base resources and omit the Minikube-only external listener. To bootstrap dev, set the root Application's `spec.source.path` in `bootstrap/root-application.yaml` to `argocd/overlays/dev` before applying it. Add `prod` overlays following the same pattern and use production-specific values, secret management, and policies. For production, replace the combined broker/controller pool with dedicated controller and broker pools, external secret management, multiple failure domains, and production storage/networking policies.
 
+The monitoring Application installs the Prometheus Operator stack from the Prometheus Community chart. Prometheus scrapes Kubernetes and node metrics plus Strimzi Kafka and operator metrics; Grafana imports the repository-managed Kafka overview dashboard. Monitoring data uses ephemeral storage with a 24-hour retention period to limit Minikube disk use. Grafana and Prometheus Services remain `ClusterIP`. Node Exporter runs in the exempt `kube-system` namespace because its host filesystem metrics require host paths; the rest of the monitoring stack runs in the baseline-enforced `monitoring` namespace.
+
 ## Deployment flow
 
 ### Prerequisites
@@ -86,6 +106,22 @@ Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. T
 Linux workstation with `git`, `gh`, `kubectl`, `minikube` 1.39+, Helm 4+, Kustomize (or kubectl's Kustomize support), and `argocd` CLI. Authenticate the GitHub CLI first (`gh auth login`). Use a machine with at least 6 CPU cores, 8 GiB RAM, and 25 GiB free disk for this lab.
 
 The Minikube node runs three combined-role Kafka pods on one failure domain. This is intentionally a small lab topology, not production HA. Kafka requests 512 MiB per pod and persistent claims are 5 GiB per broker (15 GiB total). The external listener uses TLS and NodePorts assigned by Kubernetes.
+
+### Prepare Grafana credentials
+
+Grafana's administrator password is deliberately not stored in Git. Before pushing the monitoring Application, create the namespace and a local-only password Secret. The namespace is also declared in Git and will be adopted by Argo CD:
+
+```bash
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+GRAFANA_PASSWORD="$(openssl rand -base64 32)"
+kubectl -n monitoring create secret generic grafana-admin \
+  --from-literal=admin-user=admin \
+  --from-literal=admin-password="${GRAFANA_PASSWORD}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+unset GRAFANA_PASSWORD
+```
+
+Keep the generated password in a password manager. If this installation has already been pushed, create the Secret before Grafana starts; the Grafana pod will become ready after the Secret exists.
 
 ### Create and publish the repository
 
@@ -182,9 +218,12 @@ kubectl kustomize argocd/overlays/local
 kubectl kustomize applications/overlays/local
 kubectl kustomize platform/namespaces/overlays/local
 kubectl kustomize platform/kafka/overlays/local
+kubectl kustomize platform/monitoring/overlays/local
 helm repo add strimzi https://strimzi.io/charts/
 helm repo update
 helm show chart strimzi/strimzi-kafka-operator --version 1.3.0
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm show chart prometheus-community/kube-prometheus-stack --version 92.17.1
 ```
 
 ## Validation commands
@@ -196,10 +235,12 @@ argocd app get root
 argocd app get platform-apps
 argocd app get strimzi-operator
 argocd app get local-kafka
+argocd app get monitoring
 argocd app wait root --health --sync --timeout 900
 argocd app wait platform-apps --health --sync --timeout 900
 argocd app wait strimzi-operator --health --sync --timeout 900
 argocd app wait local-kafka --health --sync --timeout 900
+argocd app wait monitoring --health --sync --timeout 900
 
 # Strimzi operator and custom resources
 kubectl -n strimzi-system get deployment,pods
@@ -218,6 +259,13 @@ kubectl -n kafka get kafkatopic demo-events
 kubectl -n kafka get kafkauser app-user
 kubectl -n kafka get secret app-user -o name
 
+# Monitoring stack and Strimzi scrape targets
+kubectl -n monitoring get pods,svc,podmonitor
+kubectl -n monitoring get prometheus
+kubectl -n monitoring get podmonitor strimzi-kafka strimzi-cluster-operator
+kubectl -n kube-system get daemonset,pods -l app.kubernetes.io/name=prometheus-node-exporter
+kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
+
 # Inspect the advertised external endpoints
 kubectl -n kafka get kafka local-kafka \
   -o jsonpath='{.status.listeners[?(@.name=="external")].bootstrapServers}{"\n"}'
@@ -226,6 +274,8 @@ minikube ip
 ```
 
 The `KafkaUser` generated Secret contains credentials and must be treated as sensitive. The external listener's bootstrap address comes from the Kafka status; broker NodePorts are also exposed in listener status. On Docker-based Minikube, use the node address returned by the listener status / `minikube ip`. If that address is not routable from the host, use a supported Minikube driver or tunnel/port-forward strategy and preserve the advertised broker addresses.
+
+Open `http://localhost:3000` after starting the Grafana port-forward and sign in as `admin` with the password stored in the `grafana-admin` Secret. The provisioned dashboard is **Strimzi Kafka Overview**. In Prometheus, check **Status → Targets** for Kafka pods in namespace `kafka` and the Strimzi operator in `strimzi-system`.
 
 Useful Kafka CLI checks from inside the cluster:
 
@@ -241,6 +291,9 @@ kubectl -n kafka exec local-kafka-local-0 -c kafka -- \
 - **Pods pending or evicted:** check `kubectl describe pod -n kafka <pod>` and `kubectl describe node minikube`; increase Minikube RAM/CPU and verify available disk.
 - **PVC pending:** inspect `kubectl get storageclass,pvc -A`. Minikube's default storage provisioner must be enabled. Do not delete PVCs unless intentionally discarding the local Kafka data.
 - **Kafka not Ready:** inspect Kafka and KafkaNodePool status conditions and operator logs. Ensure all three broker/controller pods have persistent claims and that the Kafka pool's cluster label matches `local-kafka`.
+- **Monitoring app degraded:** check `kubectl -n argocd describe application monitoring`, then inspect Prometheus Operator and Grafana pod events. Ensure the `grafana-admin` Secret exists with `admin-user` and `admin-password` keys.
+- **Kafka targets missing in Prometheus:** ensure the Kafka CR has `spec.kafka.metricsConfig.type: strimziMetricsReporter`, the `strimzi-kafka` PodMonitor exists in `monitoring`, and Prometheus discovers monitors labeled `release: monitoring`. Inspect Prometheus **Status → Targets** and `kubectl -n kafka get pods --show-labels`.
+- **Grafana dashboard missing:** check the `grafana-dashboard-kafka-overview` ConfigMap in `monitoring` has label `grafana_dashboard=1`, and that Grafana's dashboard sidecar is ready.
 - **Kafka Application reports `.spec.kafka.resources: field not declared in schema`:** Kafka broker resource requests and limits belong on the `KafkaNodePool` spec, not `Kafka.spec.kafka`. The local node pool manifest sets them; remove the unsupported field from the Kafka resource and let Argo CD resync.
 - **NodePort bootstrap connects but brokers do not:** Kafka clients must reach every advertised broker NodePort, not only the bootstrap service. Confirm the node IP and ports are routable from the host; Docker driver networking can require a different Minikube driver or a carefully configured tunnel.
 - **Topic/User not Ready:** verify `entity-operator` pods are running and their CR labels point at `local-kafka`; inspect `kubectl -n kafka describe kafkatopic demo-events` and `kubectl -n kafka describe kafkauser app-user`.
@@ -248,7 +301,7 @@ kubectl -n kafka exec local-kafka-local-0 -c kafka -- \
 ## Upgrade process
 
 1. Read the Strimzi release notes and its supported Kubernetes/Kafka version matrix. Upgrade only to a compatible Strimzi chart/operator version.
-2. Update the chart `targetRevision` in `applications/base/strimzi.yaml`, the Strimzi image tag in `infrastructure/strimzi/values.yaml`, and the Kafka `version`/`metadataVersion` in `platform/kafka/base/kafka-cluster.yaml` as required by that release.
+2. Update the relevant chart `targetRevision` in `applications/base/strimzi.yaml` or `applications/base/monitoring.yaml`, the Strimzi image tag in `infrastructure/strimzi/values.yaml`, and the Kafka `version`/`metadataVersion` in `platform/kafka/base/kafka-cluster.yaml` as required by that release.
 3. Check breaking API changes and ensure the new CRDs are applied before CRs that use them. Keep Argo sync retry enabled; stage operator/CR changes in separate commits when a migration requires ordered human review.
 4. Render Kustomize roots, review the diff, commit, and push. Argo CD syncs and reports health. Monitor Kafka rolling updates and PVC status.
 5. Back up data before any Kafka or storage migration. For this single-node lab, deleting a PVC destroys the corresponding broker's local data and is not a routine upgrade step.

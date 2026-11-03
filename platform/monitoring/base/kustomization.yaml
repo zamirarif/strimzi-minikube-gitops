@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - kafka-pod-monitor.yaml
+  - strimzi-operator-pod-monitor.yaml
+configMapGenerator:
+  - name: grafana-dashboard-kafka-overview
+    files:
+      - dashboards/kafka-overview.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"

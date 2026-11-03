@@ -23,6 +23,8 @@ spec:
       transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
       auto.create.topics.enable: false
+    metricsConfig:
+      type: strimziMetricsReporter
     jvmOptions:
       -Xms: 256m
       -Xmx: 512m

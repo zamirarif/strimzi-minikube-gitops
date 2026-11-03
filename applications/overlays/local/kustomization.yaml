@@ -30,3 +30,15 @@ patches:
       - op: replace
         path: /spec/source/path
         value: platform/kafka/overlays/local
+  - target:
+      group: argoproj.io
+      version: v1alpha1
+      kind: Application
+      name: monitoring
+    patch: |-
+      - op: add
+        path: /spec/sources/1/path
+        value: platform/monitoring/overlays/local
+      - op: add
+        path: /spec/sources/0/helm/valueFiles/-
+        value: $values/infrastructure/monitoring/overlays/local/values.yaml

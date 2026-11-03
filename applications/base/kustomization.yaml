@@ -4,3 +4,4 @@ resources:
   - namespaces.yaml
   - strimzi.yaml
   - kafka.yaml
+  - monitoring.yaml

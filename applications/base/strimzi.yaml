@@ -17,7 +17,7 @@ spec:
         releaseName: strimzi-cluster-operator
         valueFiles:
           - $values/infrastructure/strimzi/values.yaml
-    - repoURL: REPO_URL_PLACEHOLDER
+    - repoURL: https://github.com/zamirarif/strimzi-minikube-gitops.git
       targetRevision: main
       ref: values
   destination:

@@ -4,6 +4,9 @@ GitOps-first, single-node Minikube lab for Strimzi Kafka. The manifests pin the 
 
 ## Architecture
 
+For the detailed deployment flow and Strimzi/Kafka component design, see
+[ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ```mermaid
 flowchart TD
     Git[Git repository]
@@ -29,7 +32,7 @@ flowchart TD
     External --> Client[Minikube host client]
 ```
 
-Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. The root Application bootstraps the App-of-Apps; application resources then reconcile from Git with automated sync, pruning, and self-healing.
+Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. The root Application bootstraps the App-of-Apps. Automated sync, pruning, and self-healing are enabled for the root and platform Applications; the monitoring Application deliberately has automated sync disabled.
 
 ## Repository walkthrough
 

@@ -19,6 +19,14 @@ spec:
           - Read
           - Write
         host: "*"
+        resource:
+          type: topic
+          name: test-topic
+          patternType: literal
+        operations:
+          - Describe
+          - Write
+        host: "*"
       - resource:
           type: group
           name: demo-consumer

@@ -19,7 +19,7 @@ spec:
           - Read
           - Write
         host: "*"
-        resource:
+      - resource:
           type: topic
           name: test-topic
           patternType: literal

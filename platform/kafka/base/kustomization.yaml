@@ -5,3 +5,4 @@ resources:
   - kafka-cluster.yaml
   - kafka-user.yaml
   - kafka-topic.yaml
+  - kafka-topic-test-topic.yaml

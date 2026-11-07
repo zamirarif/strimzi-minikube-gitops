@@ -289,8 +289,40 @@ Open `http://localhost:3000` after starting the Grafana port-forward and sign in
 The GitOps setup deploys Redpanda Console as a lightweight, read-only Kafka
 topic explorer; it does not deploy Redpanda brokers. A dedicated Strimzi
 `KafkaUser` grants the Console access to list topics, inspect topic
-configuration, and consume records. Its generated password remains in a
-Kubernetes Secret and is not stored in Git.
+configuration, and consume records. Its generated Kafka password remains in a
+Kubernetes Secret and is not stored in Git. The Console web UI is protected by
+an Nginx Basic Auth proxy; create its login Secret before Argo CD deploys it.
+
+Generate a local htpasswd file and create the Secret. This prompts for the
+password, stores only its APR1 hash in the Kubernetes Secret, and removes the
+temporary file when the shell exits:
+
+```bash
+set -o pipefail
+read -r -p "Console username: " CONSOLE_USER
+read -r -s -p "Console password: " CONSOLE_PASSWORD
+printf '\n'
+if [ -z "$CONSOLE_USER" ] || [[ "$CONSOLE_USER" == *:* ]]; then
+  echo "Username must be non-empty and cannot contain a colon." >&2
+  exit 1
+fi
+if [ "${#CONSOLE_PASSWORD}" -lt 16 ]; then
+  echo "Use a Console password of at least 16 characters." >&2
+  exit 1
+fi
+CONSOLE_HASH="$(printf '%s' "$CONSOLE_PASSWORD" | openssl passwd -6 -stdin)"
+HTPASSWD_FILE="$(mktemp)"
+trap 'rm -f "$HTPASSWD_FILE"; unset CONSOLE_PASSWORD CONSOLE_HASH' EXIT
+chmod 600 "$HTPASSWD_FILE"
+printf '%s:%s\n' "$CONSOLE_USER" "$CONSOLE_HASH" > "$HTPASSWD_FILE"
+kubectl -n kafka create secret generic redpanda-console-auth \
+  --from-file=htpasswd="$HTPASSWD_FILE" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Keep the username and password in a password manager. Never commit the
+htpasswd file or the Secret to Git. If the Console deployment already exists,
+Argo CD will roll it out after the Secret is created.
 
 Check that the explorer and its Kafka user are ready:
 
@@ -300,10 +332,10 @@ kubectl -n kafka rollout status deployment/redpanda-console --timeout=5m
 kubectl -n kafka port-forward svc/redpanda-console 8080:8080
 ```
 
-Open `http://localhost:8080` while the port-forward is running. The Service is
-ClusterIP-only; use port-forwarding for local access. The Console UI itself
-has no login configured, so do not expose it outside the local learning
-cluster.
+Open `http://localhost:8080` while the port-forward is running and sign in
+with the username and password used to create the Secret. The Service is
+ClusterIP-only; use port-forwarding for local access. Do not expose this
+plaintext HTTP endpoint outside the local learning cluster without TLS.
 
 Useful Kafka CLI checks from inside the cluster:
 

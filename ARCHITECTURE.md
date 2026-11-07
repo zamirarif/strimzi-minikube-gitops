@@ -347,6 +347,10 @@ Redpanda Console is deployed as a separate UI, not as a Redpanda broker.
 Its `topic-explorer` KafkaUser has read-only ACLs for listing and consuming
 topics, and its generated password is injected from a Kubernetes Secret. The
 Console Service is ClusterIP-only and intended for local port-forward access.
+An Nginx sidecar applies Basic Auth using an htpasswd file supplied through a
+separate Kubernetes Secret; neither login credentials nor hashes belong in
+Git. Console listens on the pod's loopback interface so the Service can only
+reach it through the authenticated proxy.
 
 ### Monitoring and telemetry flow
 

@@ -126,8 +126,11 @@ use broker addresses returned in metadata, so those advertised addresses must
 also be reachable by the client.
 
 Redpanda Console is a web UI, not a Kafka broker. It connects through the
-internal listener using its own SCRAM user. The Console Service is
-ClusterIP-only; use `kubectl port-forward` for local browser access.
+internal listener using its own SCRAM user. An Nginx sidecar protects the UI
+with Basic Auth using a hash supplied from a Kubernetes Secret. The Console
+listens on the pod's loopback interface so clients cannot bypass the proxy
+through its pod IP. The Service is ClusterIP-only; use `kubectl port-forward`
+for local browser access.
 
 ## How to follow a change
 

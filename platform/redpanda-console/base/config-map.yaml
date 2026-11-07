@@ -10,3 +10,6 @@ data:
       sasl:
         enabled: true
         mechanism: SCRAM-SHA-512
+    server:
+      listenAddress: "127.0.0.1"
+      listenPort: 8080

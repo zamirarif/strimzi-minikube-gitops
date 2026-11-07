@@ -25,11 +25,12 @@ spec:
           patternType: literal
         operations:
           - Describe
+          - Read
           - Write
         host: "*"
       - resource:
           type: group
-          name: demo-consumer
+          name: kafka-http-demo
           patternType: literal
         operations:
           - Read

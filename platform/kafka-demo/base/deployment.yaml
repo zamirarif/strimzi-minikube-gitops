@@ -28,6 +28,13 @@ spec:
               value: test-topic
             - name: KAFKA_CONSUMER_GROUP
               value: kafka-http-demo
+            - name: KAFKA_SASL_USERNAME
+              value: app-user
+            - name: KAFKA_SASL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-user
+                  key: password
           resources:
             requests:
               cpu: 100m

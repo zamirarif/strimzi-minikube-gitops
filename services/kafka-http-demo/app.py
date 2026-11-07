@@ -24,6 +24,21 @@ CONSUMER_GROUP = os.getenv("KAFKA_CONSUMER_GROUP", "kafka-http-demo")
 KAFKA_RETRY_SECONDS = 5
 
 
+def kafka_client_config() -> dict[str, str]:
+    username = os.getenv("KAFKA_SASL_USERNAME")
+    password = os.getenv("KAFKA_SASL_PASSWORD")
+    if not username or not password:
+        raise RuntimeError("Kafka SASL username and password must be configured")
+
+    return {
+        "bootstrap_servers": BOOTSTRAP_SERVERS,
+        "security_protocol": "SASL_PLAINTEXT",
+        "sasl_mechanism": "SCRAM-SHA-512",
+        "sasl_plain_username": username,
+        "sasl_plain_password": password,
+    }
+
+
 class ProduceRequest(BaseModel):
     message: str = Field(min_length=1, max_length=100_000)
     key: str | None = Field(default=None, max_length=1_000)
@@ -49,13 +64,15 @@ def publish_message(
     }
 
 
-def consume_messages(stop_event: threading.Event) -> None:
+def consume_messages(
+    stop_event: threading.Event, client_config: dict[str, str]
+) -> None:
     while not stop_event.is_set():
         consumer: KafkaConsumer | None = None
         try:
             consumer = KafkaConsumer(
                 TOPIC,
-                bootstrap_servers=BOOTSTRAP_SERVERS,
+                **client_config,
                 group_id=CONSUMER_GROUP,
                 auto_offset_reset="earliest",
                 enable_auto_commit=True,
@@ -87,8 +104,9 @@ def consume_messages(stop_event: threading.Event) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     stop_event = threading.Event()
+    client_config = kafka_client_config()
     producer = KafkaProducer(
-        bootstrap_servers=BOOTSTRAP_SERVERS,
+        **client_config,
         acks="all",
         retries=5,
         max_block_ms=10_000,
@@ -96,7 +114,7 @@ async def lifespan(app: FastAPI):
     )
     consumer_thread = threading.Thread(
         target=consume_messages,
-        args=(stop_event,),
+        args=(stop_event, client_config),
         name="kafka-consumer",
         daemon=True,
     )

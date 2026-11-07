@@ -5,11 +5,12 @@ This learning service exposes an HTTP endpoint that produces JSON messages to
 The consumer prints received records to the container log.
 
 The service connects to `local-kafka-kafka-bootstrap:9092` from within the
-`kafka` namespace. It uses the repository's existing **plaintext** listener.
-This listener does not enable SCRAM authentication, so the `KafkaUser` ACLs
-are not used by this demo. The HTTP endpoint also has no client authentication
-and is intended only for this local learning cluster; do not expose it or use
-this configuration in production.
+`kafka` namespace using SCRAM-SHA-512 over the internal SASL_PLAINTEXT
+listener. It reads the `app-user` password from the Strimzi-generated
+Kubernetes Secret. That user's ACLs allow producing and consuming from
+`test-topic` with the `kafka-http-demo` consumer group. The HTTP endpoint has
+no client authentication and is intended only for this local learning
+cluster; do not expose it or use this configuration in production.
 
 ## Build and deploy to Minikube
 
@@ -24,6 +25,13 @@ kubectl kustomize platform/kafka-demo/base
 
 Commit and push the source and manifests to the tracked Git branch. Argo CD
 then creates the `kafka-http-demo` Application and deploys the service.
+
+The `KafkaUser` resource must be Ready before the Secret is created:
+
+```bash
+kubectl -n kafka wait kafkauser/app-user --for=condition=Ready --timeout=5m
+kubectl -n kafka get secret app-user
+```
 
 Check application and workload health:
 

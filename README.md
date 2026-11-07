@@ -5,7 +5,9 @@ GitOps-first, single-node Minikube lab for Strimzi Kafka. The manifests pin the 
 ## Architecture
 
 For the detailed deployment flow and Strimzi/Kafka component design, see
-[ARCHITECTURE.md](./ARCHITECTURE.md).
+[ARCHITECTURE.md](./ARCHITECTURE.md). New to Strimzi? Start with
+[`STRIMZI-GUIDE.md`](./STRIMZI-GUIDE.md) for an explanation of the operator,
+Kafka custom resources, and how they fit together in this deployment.
 
 ```mermaid
 flowchart TD

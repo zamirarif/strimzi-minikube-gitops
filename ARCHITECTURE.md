@@ -7,6 +7,9 @@ against the cluster. There is no CI workflow defined in this repository; local
 render checks and Argo CD perform the validation and deployment described
 below.
 
+For a beginner-friendly explanation of Strimzi and the resources used by this
+deployment, see [`STRIMZI-GUIDE.md`](./STRIMZI-GUIDE.md).
+
 ## At a glance
 
 ```mermaid

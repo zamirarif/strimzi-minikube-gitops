@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redpanda-console-config
+data:
+  config.yaml: |
+    kafka:
+      brokers:
+        - local-kafka-kafka-bootstrap:9092
+      sasl:
+        enabled: true
+        mechanism: SCRAM-SHA-512

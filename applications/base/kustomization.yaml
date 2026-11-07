@@ -5,4 +5,5 @@ resources:
   - strimzi.yaml
   - kafka.yaml
   - kafka-http-demo.yaml
+  - redpanda-console.yaml
   - monitoring.yaml

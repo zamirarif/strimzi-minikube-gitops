@@ -19,6 +19,7 @@ flowchart TD
     Operator[strimzi-operator Helm chart]
     KafkaApp[local-kafka Kustomize app]
     MonitoringApp[monitoring Helm plus Kustomize app]
+    ConsoleApp[redpanda-console Kustomize app]
     CRs[Kafka and KafkaNodePool CRs]
     Entity[Strimzi Entity Operator]
     Clients[Kafka clients]
@@ -31,6 +32,7 @@ flowchart TD
     Apps --> Operator
     Apps --> KafkaApp
     Apps --> MonitoringApp
+    Apps --> ConsoleApp
     Operator --> CRs
     KafkaApp --> CRs
     CRs --> Entity
@@ -83,13 +85,13 @@ production overlay in the repository.
 ### 3. App-of-Apps creates the child Applications
 
 [`applications/base/kustomization.yaml`](./applications/base/kustomization.yaml)
-includes Applications for namespaces, Strimzi, Kafka, and monitoring. The
-environment overlay changes their Kustomize paths or adds environment-specific
-Helm values. The `sync-wave` annotations on these Application objects express
-the intended ordering: namespaces (`-2`), Strimzi (`-1`), Kafka (`0`), then
-monitoring (`1`). Strimzi and Kafka Applications also have retry/backoff
-configured because Kafka custom resources depend on Strimzi CRDs being
-installed.
+includes Applications for namespaces, Strimzi, Kafka, Redpanda Console, and
+monitoring. The environment overlay changes their Kustomize paths or adds
+environment-specific Helm values. The `sync-wave` annotations on these
+Application objects express the intended ordering: namespaces (`-2`), Strimzi
+(`-1`), Kafka (`0`), then monitoring and Redpanda Console (`1`). Strimzi and
+Kafka Applications also have retry/backoff configured because Kafka custom
+resources depend on Strimzi CRDs being installed.
 
 The child Applications source different kinds of content:
 
@@ -98,6 +100,7 @@ The child Applications source different kinds of content:
 | `platform-namespaces` | `platform/namespaces/...` | Kubernetes default namespace | `kafka`, `strimzi-system`, and `monitoring` Namespace resources |
 | `strimzi-operator` | Strimzi Helm chart plus Git-hosted values | `strimzi-system` | Strimzi operator and its supporting resources |
 | `local-kafka` | `platform/kafka/...` Kustomize overlay | `kafka` | Kafka, KafkaNodePool, KafkaTopic, and KafkaUser custom resources |
+| `redpanda-console` | `platform/redpanda-console/base` | `kafka` | Read-only topic explorer connected to Strimzi Kafka using a dedicated SCRAM user |
 | `monitoring` | kube-prometheus-stack Helm chart plus Git-hosted values and monitors | `monitoring` | Prometheus, Grafana, and monitoring configuration |
 
 The local overlay adds values for the Strimzi and monitoring charts and adds
@@ -336,6 +339,11 @@ and version-controlled without managing broker pods directly.
 When changing a topic or user, update the matching CR in Git and check its
 `Ready` condition after the operator reconciles it. The User Operator creates
 the Secret named after the `KafkaUser`; treat its credentials as sensitive.
+
+Redpanda Console is deployed as a separate UI, not as a Redpanda broker.
+Its `topic-explorer` KafkaUser has read-only ACLs for listing and consuming
+topics, and its generated password is injected from a Kubernetes Secret. The
+Console Service is ClusterIP-only and intended for local port-forward access.
 
 ### Monitoring and telemetry flow
 

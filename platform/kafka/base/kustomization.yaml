@@ -4,5 +4,6 @@ resources:
   - kafka-nodepool.yaml
   - kafka-cluster.yaml
   - kafka-user.yaml
+  - kafka-user-topic-explorer.yaml
   - kafka-topic.yaml
   - kafka-topic-test-topic.yaml

@@ -243,6 +243,7 @@ argocd app wait root --health --sync --timeout 900
 argocd app wait platform-apps --health --sync --timeout 900
 argocd app wait strimzi-operator --health --sync --timeout 900
 argocd app wait local-kafka --health --sync --timeout 900
+argocd app wait redpanda-console --health --sync --timeout 900
 argocd app wait monitoring --health --sync --timeout 900
 
 # Strimzi operator and custom resources
@@ -258,6 +259,7 @@ kubectl -n kafka get pods -l strimzi.io/cluster=local-kafka
 # Topic and user reconciliation
 kubectl -n kafka wait kafkatopic/demo-events --for=condition=Ready --timeout=5m
 kubectl -n kafka wait kafkauser/app-user --for=condition=Ready --timeout=5m
+kubectl -n kafka wait kafkauser/topic-explorer --for=condition=Ready --timeout=5m
 kubectl -n kafka get kafkatopic demo-events
 kubectl -n kafka get kafkauser app-user
 kubectl -n kafka get secret app-user -o name
@@ -279,6 +281,27 @@ minikube ip
 The `KafkaUser` generated Secret contains credentials and must be treated as sensitive. The external listener's bootstrap address comes from the Kafka status; broker NodePorts are also exposed in listener status. On Docker-based Minikube, use the node address returned by the listener status / `minikube ip`. If that address is not routable from the host, use a supported Minikube driver or tunnel/port-forward strategy and preserve the advertised broker addresses.
 
 Open `http://localhost:3000` after starting the Grafana port-forward and sign in as `admin` with the password stored in the `grafana-admin` Secret. The provisioned dashboard is **Strimzi Kafka Overview**. In Prometheus, check **Status → Targets** for Kafka pods in namespace `kafka` and the Strimzi operator in `strimzi-system`.
+
+### Kafka topic explorer
+
+The GitOps setup deploys Redpanda Console as a lightweight, read-only Kafka
+topic explorer; it does not deploy Redpanda brokers. A dedicated Strimzi
+`KafkaUser` grants the Console access to list topics, inspect topic
+configuration, and consume records. Its generated password remains in a
+Kubernetes Secret and is not stored in Git.
+
+Check that the explorer and its Kafka user are ready:
+
+```bash
+kubectl -n kafka wait kafkauser/topic-explorer --for=condition=Ready --timeout=5m
+kubectl -n kafka rollout status deployment/redpanda-console --timeout=5m
+kubectl -n kafka port-forward svc/redpanda-console 8080:8080
+```
+
+Open `http://localhost:8080` while the port-forward is running. The Service is
+ClusterIP-only; use port-forwarding for local access. The Console UI itself
+has no login configured, so do not expose it outside the local learning
+cluster.
 
 Useful Kafka CLI checks from inside the cluster:
 

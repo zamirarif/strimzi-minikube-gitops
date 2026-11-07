@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda-console
+  labels:
+    app.kubernetes.io/name: redpanda-console
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: redpanda-console
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-http-demo
+  labels:
+    app.kubernetes.io/name: kafka-http-demo
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kafka-http-demo
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

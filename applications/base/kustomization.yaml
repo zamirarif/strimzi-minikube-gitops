@@ -7,3 +7,4 @@ resources:
   - kafka-http-demo.yaml
   - redpanda-console.yaml
   - monitoring.yaml
+  - kagent.yaml

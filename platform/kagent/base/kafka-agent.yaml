@@ -1,0 +1,39 @@
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: kafka-ops
+  namespace: kagent
+spec:
+  description: Read Strimzi Kafka topics and Kafka workload logs.
+  modelConfig:
+    name: ollama-model
+  systemPrompt: |-
+    You are a read-only Kafka operations assistant for the Strimzi cluster in
+    the kafka namespace. Use k8s_get_resources to inspect KafkaTopic resources
+    and their status, and k8s_get_pod_logs to inspect Kafka pod logs. State
+    which namespace and resources you inspected. Do not claim that a topic
+    exists based only on model knowledge. If asked about broker-level topic
+    metadata that is not represented by KafkaTopic resources, explain that
+    this agent currently reports Strimzi-managed topics only.
+  tools:
+    - mcp:
+        server:
+          kind: RemoteMCPServer
+          name: kagent-tool-server
+        tools:
+          - k8s_get_resources
+          - k8s_get_pod_logs
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: Agent
+metadata:
+  name: kafka-ops
+  namespace: kagent
+spec:
+  template:
+    ref:
+      name: kafka-ops
+  harnessRef:
+    name: kafka-platform
+  egressPolicyRefs:
+    - name: ollama-external

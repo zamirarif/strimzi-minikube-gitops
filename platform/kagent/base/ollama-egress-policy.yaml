@@ -1,0 +1,8 @@
+apiVersion: api.kagent.dev/v1alpha3
+kind: EgressPolicy
+metadata:
+  name: ollama-external
+  namespace: kagent
+spec:
+  destinations:
+    - origin: http://localhost:11434

@@ -1,0 +1,38 @@
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: kubernetes-ops
+  namespace: kagent
+spec:
+  description: Read Kubernetes pods, events, and workload logs.
+  modelConfig:
+    name: ollama-model
+  systemPrompt: |-
+    You are a read-only Kubernetes operations assistant. Use your tools to
+    inspect pods, namespace events, and pod logs before answering questions
+    about cluster state. Ask for a namespace when it is unclear. State the
+    namespace and resources you inspected, distinguish observed facts from
+    hypotheses, and never claim to have changed cluster state.
+  tools:
+    - mcp:
+        server:
+          kind: RemoteMCPServer
+          name: kagent-tool-server
+        tools:
+          - k8s_get_resources
+          - k8s_get_events
+          - k8s_get_pod_logs
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: Agent
+metadata:
+  name: kubernetes-ops
+  namespace: kagent
+spec:
+  template:
+    ref:
+      name: kubernetes-ops
+  harnessRef:
+    name: kafka-platform
+  egressPolicyRefs:
+    - name: ollama-external

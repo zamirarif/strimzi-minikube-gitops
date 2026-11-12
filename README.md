@@ -8,6 +8,8 @@ For the detailed deployment flow and Strimzi/Kafka component design, see
 [ARCHITECTURE.md](./ARCHITECTURE.md). New to Strimzi? Start with
 [`STRIMZI-GUIDE.md`](./STRIMZI-GUIDE.md) for an explanation of the operator,
 Kafka custom resources, and how they fit together in this deployment.
+For the optional kagent Kafka and Kubernetes assistants backed by an external
+Ollama server, see [`KAGENT-GUIDE.md`](./KAGENT-GUIDE.md).
 
 ```mermaid
 flowchart TD
@@ -32,6 +34,8 @@ flowchart TD
     Monitoring --> KafkaMetrics[Kafka and Strimzi metrics]
     Monitoring --> NodeMetrics[Kubernetes node and workload metrics]
     External --> Client[Minikube host client]
+    Apps --> Kagent[kagent Kafka and Kubernetes agents]
+    Kagent --> Ollama[External Ollama model provider]
 ```
 
 Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. The root Application bootstraps the App-of-Apps. Automated sync, pruning, and self-healing are enabled for the root and platform Applications; the monitoring Application deliberately has automated sync disabled.
@@ -52,6 +56,7 @@ Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. T
 ├── applications/
 │   ├── base/
 │   │   ├── kafka.yaml
+│   │   ├── kagent.yaml
 │   │   ├── kustomization.yaml
 │   │   ├── monitoring.yaml
 │   │   ├── namespaces.yaml
@@ -81,6 +86,13 @@ Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. T
 │   │   └── overlays/
 │   │       ├── dev/kustomization.yaml
 │   │       └── local/kustomization.yaml
+│   ├── kagent/
+│   │   └── base/
+│   │       ├── harness.yaml
+│   │       ├── kafka-agent.yaml
+│   │       ├── kubernetes-agent.yaml
+│   │       ├── model-config.yaml
+│   │       └── ollama-egress-policy.yaml
 │   ├── monitoring/
 │   │   ├── base/
 │   │   │   ├── dashboards/kafka-overview.json
@@ -97,6 +109,7 @@ Argo CD owns the namespace, operator, Kafka custom resources, topic, and user. T
 │       └── overlays/
 │           ├── dev/kustomization.yaml
 │           └── local/kustomization.yaml
+├── KAGENT-GUIDE.md
 └── README.md
 ```
 
@@ -224,6 +237,7 @@ kubectl kustomize applications/overlays/local
 kubectl kustomize platform/namespaces/overlays/local
 kubectl kustomize platform/kafka/overlays/local
 kubectl kustomize platform/monitoring/overlays/local
+kubectl kustomize platform/kagent/base
 helm repo add strimzi https://strimzi.io/charts/
 helm repo update
 helm show chart strimzi/strimzi-kafka-operator --version 1.3.0
@@ -247,6 +261,7 @@ argocd app wait strimzi-operator --health --sync --timeout 900
 argocd app wait local-kafka --health --sync --timeout 900
 argocd app wait redpanda-console --health --sync --timeout 900
 argocd app wait monitoring --health --sync --timeout 900
+argocd app wait kagent-workloads --health --sync --timeout 900
 
 # Strimzi operator and custom resources
 kubectl -n strimzi-system get deployment,pods

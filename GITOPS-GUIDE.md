@@ -60,6 +60,7 @@ The root Application is the entry point:
    | `strimzi-operator` | Strimzi Helm chart plus `infrastructure/strimzi` values | Strimzi operator |
    | `local-kafka` | `platform/kafka/overlays/local` | Kafka, KafkaNodePool, KafkaTopic, KafkaUser custom resources |
    | `monitoring` | kube-prometheus-stack Helm chart plus Git values and `platform/monitoring` | Prometheus, Grafana, PodMonitors, dashboard configuration |
+   | `kagent-workloads` | `platform/kagent/base` | Ollama model/egress configuration, Harness, and Kafka/Kubernetes agents |
 
 The overlays under `applications/overlays/local` and `applications/overlays/dev`
 select paths and add environment-specific Helm values. The Kafka local overlay
@@ -67,10 +68,13 @@ adds a TLS NodePort listener; dev reuses the common Kafka base without this
 listener. The root currently selects local. There is no production overlay.
 
 Expected ordering is expressed with sync waves: namespaces `-2`, Strimzi `-1`,
-Kafka `0`, and monitoring `1`. A wave orders resources during a parent sync;
-it is not a guarantee that a child Application's pods or CRDs are ready before
-another child reconciles. Retry/backoff and checking actual health/readiness
-remain important.
+Kafka `0`, monitoring and Redpanda Console `1`, and kagent workloads `2`. A
+wave orders resources during a parent sync; it is not a guarantee that a child
+Application's pods or CRDs are ready before another child reconciles.
+`kagent-workloads` also depends on the separately installed kagent CRDs and
+controller; its Application retries until those prerequisites are available.
+Retry/backoff and checking actual health/readiness remain important. See
+[`KAGENT-GUIDE.md`](./KAGENT-GUIDE.md) for the kagent installation procedure.
 
 ### Who owns what?
 
@@ -88,9 +92,9 @@ state.
 
 ## Sync behavior and operational impact
 
-The root, `platform-apps`, namespace, Strimzi, and Kafka Applications have
-automated sync, pruning, and self-healing configured. The monitoring
-Application does not have automated sync enabled.
+The root, `platform-apps`, namespace, Strimzi, Kafka, and kagent-workloads
+Applications have automated sync, pruning, and self-healing configured. The
+monitoring Application does not have automated sync enabled.
 
 - **Automated sync:** Argo CD applies changed desired state without an
   operator manually starting a sync.

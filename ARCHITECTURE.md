@@ -9,6 +9,8 @@ below.
 
 For a beginner-friendly explanation of Strimzi and the resources used by this
 deployment, see [`STRIMZI-GUIDE.md`](./STRIMZI-GUIDE.md).
+For the optional kagent agents and external Ollama setup, see
+[`KAGENT-GUIDE.md`](./KAGENT-GUIDE.md).
 
 ## At a glance
 
@@ -23,6 +25,8 @@ flowchart TD
     KafkaApp[local-kafka Kustomize app]
     MonitoringApp[monitoring Helm plus Kustomize app]
     ConsoleApp[redpanda-console Kustomize app]
+    KagentApp[kagent-workloads Kustomize app]
+    Ollama[External Ollama model provider]
     CRs[Kafka and KafkaNodePool CRs]
     Entity[Strimzi Entity Operator]
     Clients[Kafka clients]
@@ -36,6 +40,7 @@ flowchart TD
     Apps --> KafkaApp
     Apps --> MonitoringApp
     Apps --> ConsoleApp
+    Apps --> KagentApp
     Operator --> CRs
     KafkaApp --> CRs
     CRs --> Entity
@@ -43,10 +48,11 @@ flowchart TD
     MonitoringApp --> Prom
     Prom -->|PodMonitors| CRs
     Prom --> Grafana
+    KagentApp --> Ollama
 ```
 
 The root and App-of-Apps Applications have automated sync, pruning, and
-self-healing enabled. The child Applications for namespaces, Strimzi, and Kafka
+self-healing enabled. The child Applications for namespaces, Strimzi, Kafka, and kagent workloads
 also have automated sync enabled. The monitoring Application is intentionally
 different: automated sync is omitted in
 [`applications/base/monitoring.yaml`](./applications/base/monitoring.yaml).
@@ -105,6 +111,13 @@ The child Applications source different kinds of content:
 | `local-kafka` | `platform/kafka/...` Kustomize overlay | `kafka` | Kafka, KafkaNodePool, KafkaTopic, and KafkaUser custom resources |
 | `redpanda-console` | `platform/redpanda-console/base` | `kafka` | Read-only topic explorer connected to Strimzi Kafka using a dedicated SCRAM user |
 | `monitoring` | kube-prometheus-stack Helm chart plus Git-hosted values and monitors | `monitoring` | Prometheus, Grafana, and monitoring configuration |
+| `kagent-workloads` | `platform/kagent/base` | `kagent` | Ollama ModelConfig, external-model EgressPolicy, shared Harness, and Kafka/Kubernetes Agent resources |
+
+kagent's controller, CRDs, Agent Substrate, and development database are
+installed with the upstream CLI before the `kagent-workloads` resources can
+reconcile. The CLI creates installation prerequisites in order; the two
+agents and their configuration are then managed by Argo CD. See
+[`KAGENT-GUIDE.md`](./KAGENT-GUIDE.md) for the install and network requirements.
 
 The local overlay adds values for the Strimzi and monitoring charts and adds
 the Kafka listener patch. The chart versions and base values are pinned in the
@@ -128,6 +141,7 @@ kubectl kustomize applications/overlays/local
 kubectl kustomize platform/namespaces/overlays/local
 kubectl kustomize platform/kafka/overlays/local
 kubectl kustomize platform/monitoring/overlays/local
+kubectl kustomize platform/kagent/base
 ```
 
 These render Kustomize sources only. Argo CD renders the Helm sources using its
@@ -140,14 +154,16 @@ The platform separates control-plane resources from workloads:
 | Namespace | Main contents | Owner |
 |---|---|---|
 | `argocd` | Argo CD and the `root`, `platform-apps`, and child Application CRs | Argo CD installation plus the root/App-of-Apps chain |
+| `kagent` | kagent controller, built-in MCP server, PostgreSQL, and agent resources | `platform-namespaces`, kagent CLI installation, and `kagent-workloads` Application |
 | `strimzi-system` | Strimzi Cluster Operator | `strimzi-operator` Application |
 | `kafka` | Kafka cluster, node pool, Topic/User custom resources, and generated Kafka pods, services, PVCs, and secrets | `local-kafka` Application and Strimzi |
 | `monitoring` | Prometheus Operator stack, Grafana, PodMonitors, dashboard ConfigMap | `monitoring` Application |
 | `kube-system` | Prometheus Node Exporter DaemonSet | kube-prometheus-stack chart |
 
-The namespace Application creates `kafka`, `strimzi-system`, and `monitoring`
-with Pod Security Admission enforcement set to `baseline` and audit/warn set
-to `restricted`. Node Exporter is placed in `kube-system` because it needs
+The namespace Application creates `kagent`, `kafka`, `strimzi-system`, and
+`monitoring`; the Kafka, Strimzi, and monitoring namespaces have Pod Security
+Admission enforcement set to `baseline` and audit/warn set to `restricted`.
+Node Exporter is placed in `kube-system` because it needs
 host-level access for node metrics. Namespace creation is also enabled as a
 sync option on several Applications; the Namespace Application supplies the
 labels and security settings.

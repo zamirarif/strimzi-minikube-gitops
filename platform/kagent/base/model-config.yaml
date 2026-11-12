@@ -7,4 +7,4 @@ spec:
   model: qwen3:8b
   provider: Ollama
   ollama:
-    host: http://localhost:11434
+    host: http://host.minikube.internal:11434

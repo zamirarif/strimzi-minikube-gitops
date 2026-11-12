@@ -92,8 +92,8 @@ helm version
 ```
 
 Ensure `helm version` reports Helm 3 before installing kagent. Create a kagent
-CLI configuration file. This enables gRPC reflection for debugging; no model
-API key is needed for self-hosted Ollama:
+CLI configuration file. This enables gRPC reflection for debugging and selects
+Ollama as the install-time model provider:
 
 ```bash
 cat > kagent-values.yaml <<'EOF'
@@ -104,14 +104,22 @@ EOF
 
 cat > kagent-config.yaml <<'EOF'
 install:
+  defaultModelProvider: Ollama
   kagent:
     valuesFiles:
       - kagent-values.yaml
 EOF
 
+export OLLAMA_API_KEY=local-ollama-placeholder
 kagent --config kagent-config.yaml install --namespace kagent
 kubectl rollout status deployment/kagent-controller -n kagent --timeout=300s
 ```
+
+The CLI defaults to OpenAI and requires its API key. This platform uses Ollama,
+so `defaultModelProvider: Ollama` avoids requiring an OpenAI key. The CLI
+currently also requires a non-empty `OLLAMA_API_KEY`; the placeholder above is
+for local Ollama only and is not a real credential. Argo CD applies the Ollama
+`ModelConfig` after the controller and CRDs are installed.
 
 The CLI installs the CRDs, Agent Substrate, its certificate controller,
 PostgreSQL for this development setup, the kagent controller, and the built-in

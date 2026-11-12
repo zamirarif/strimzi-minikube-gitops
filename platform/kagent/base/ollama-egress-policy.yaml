@@ -5,4 +5,4 @@ metadata:
   namespace: kagent
 spec:
   destinations:
-    - origin: http://localhost:11434
+    - origin: http://host.minikube.internal:11434

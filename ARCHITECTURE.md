@@ -48,7 +48,7 @@ flowchart TD
     MonitoringApp --> Prom
     Prom -->|PodMonitors| CRs
     Prom --> Grafana
-    KagentApp --> Ollama
+    KagentApp -->|configures endpoint| Ollama
 ```
 
 The root and App-of-Apps Applications have automated sync, pruning, and
@@ -59,6 +59,61 @@ different: automated sync is omitted in
 Argo CD can still render and show monitoring drift, but it does not
 automatically sync that Application. Parent apps create/manage Application
 objects; they do not override each child Application's own sync policy.
+
+## Local Minikube runtime
+
+This view shows how the local workloads communicate at runtime. Ollama runs in
+WSL outside the Kubernetes cluster; `host.minikube.internal` is the hostname
+configured for the Ollama `ModelConfig` and the agent's `EgressPolicy`.
+
+```mermaid
+flowchart LR
+    User[User browser]
+    PortForward[kubectl port-forward<br/>localhost:8082 to kagent-ui:8080]
+
+    subgraph Cluster[Minikube Kubernetes cluster]
+        subgraph KagentNS[kagent namespace]
+            UI[kagent UI]
+            Controller[kagent controller]
+            Agent[Kafka Ops agent<br/>Agent Substrate worker]
+            MCP[kagent Kubernetes tools<br/>MCP server]
+            Model[ModelConfig<br/>qwen3:8b]
+            Egress[EgressPolicy<br/>ollama-external]
+        end
+
+        subgraph KafkaNS[kafka namespace]
+            KafkaAPI[KafkaTopic resources]
+            KafkaPods[Strimzi Kafka pods]
+        end
+
+        KubeAPI[Kubernetes API]
+        Strimzi[Strimzi operator]
+    end
+
+    subgraph WSL[WSL host]
+        Ollama[Ollama service<br/>HTTP port 11434<br/>qwen3:8b]
+    end
+
+    User --> PortForward --> UI
+    UI --> Controller
+    Controller --> Agent
+    Agent -->|MCP requests| MCP
+    MCP -->|reads topics and pod logs| KubeAPI
+    KubeAPI --> KafkaAPI
+    KubeAPI --> KafkaPods
+    Strimzi -->|reconciles| KafkaAPI
+    Agent -->|model requests through permitted egress| Egress
+    Egress -->|http://host.minikube.internal:11434| Ollama
+    Model -. selected by .-> Agent
+```
+
+The browser reaches the UI through a local port-forward. The Kafka Ops agent
+uses the Kubernetes tools MCP server to inspect `KafkaTopic` resources and Kafka
+pod logs; Strimzi reconciles the Kafka custom resources into broker workloads.
+Model requests leave the cluster through Agent Substrate egress to Ollama in
+WSL. Ollama must listen on an address reachable from Minikube, and the same
+endpoint must be configured in both the ModelConfig and EgressPolicy. The
+diagram does not imply that Ollama or its model runs inside Kubernetes.
 
 ## Deployment pipeline
 
